@@ -1,0 +1,13 @@
+{
+    "[python]": {
+        "editor.formatOnSave": true, // ファイル保存時に適用
+        "editor.codeActionsOnSave": {
+            "source.fixAll": "explicit", // 自動修正
+            "source.organizeImports": "explicit" // import文のソート
+        },
+        "editor.defaultFormatter": "charliermarsh.ruff" // フォーマッターをRuffに設定
+    },
+    "python.useEnvironmentsExtension": false,
+    "python.defaultInterpreterPath": "${workspaceFolder}/.venv/bin/python",
+    "window.zoomLevel": 0
+}
