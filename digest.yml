@@ -16,21 +16,21 @@ jobs:
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
-
-      - uses: actions/setup-python@v5
+ 
+      - uses: astral-sh/setup-uv@v6
         with:
-          python-version: "3.12"
-          cache: pip
-
-      - run: pip install -r requirements.txt
-
+          enable-cache: true
+ 
+      - name: Install dependencies
+        run: uv sync --locked   # Pythonのバージョンも pyproject.toml / .python-version から解決される
+ 
       - name: Run
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           GEMINI_MODEL: ${{ vars.GEMINI_MODEL || 'gemini-3.8-flash' }}
           OUTPUT_DIR: digests
-        run: python main.py
-
+        run: uv run news-summary-bot
+ 
       - name: Commit digest
         run: |
           git config user.name  "github-actions[bot]"

@@ -7,11 +7,8 @@ from pathlib import Path
 import feedparser
 import requests
 from bs4 import BeautifulSoup
-from dotenv import load_dotenv
 from google import genai
 from googleapiclient.http import MediaFileUpload
-
-load_dotenv()
 
 MAX_PER_SOURCE = 15
 HEADERS = {
