@@ -128,14 +128,40 @@ def build_prompt(headlines: dict[str, list[str]]) -> str:
 """
 
 
+import random
+import re
+import time
+
+NON_RETRYABLE = {400, 401, 403, 404}  # 再試行しても直らないエラー
+
+
+def with_retry(fn, max_attempts: int = 6):
+    """503/429/通信エラーなどを、待ちを伸ばしながら再試行する。"""
+    for attempt in range(max_attempts):
+        try:
+            return fn()
+        except Exception as e:
+            m = re.search(r"Error code: (\d{3})", str(e))
+            code = getattr(e, "status_code", None) or (int(m.group(1)) if m else None)
+            if code in NON_RETRYABLE or attempt == max_attempts - 1:
+                raise
+            wait = 10 * 2**attempt + random.uniform(0, 5)  # 約10, 20, 40, 80, 160秒
+            print(
+                f"[WARN] {type(e).__name__} (code={code})。{wait:.0f}秒後に再試行 ({attempt + 1}/{max_attempts - 1})"
+            )
+            time.sleep(wait)
+
+
 def summarize(prompt: str) -> str:
     api_key = os.getenv("GEMINI_API_KEY")
     if not api_key:
         sys.exit("GEMINI_API_KEY が未設定です (.env を確認してください)")
     model = os.getenv("GEMINI_MODEL", "gemini-3.8-flash")
     client = genai.Client(api_key=api_key)
+    interaction = with_retry(
+        lambda: client.interactions.create(model=model, input=prompt)
+    )
 
-    interaction = client.interactions.create(model=model, input=prompt)
     return interaction.output_text
 
 
