@@ -4,7 +4,7 @@ on:
   schedule:
     # UTC 日〜木の22:00 = JST 月〜金の07:00 (土日のJSTは実行しない)
     # ※曜日はUTC基準: 0=日 1=月 ... 6=土。数分〜十数分遅れることがあります
-    - cron: "0 22 * * 1-5"   # JST 火〜土の07:00
+    - cron: "0 22 * * *"   # JST 火〜土の07:00
   workflow_dispatch:        # 手動実行ボタン
 
 permissions:
