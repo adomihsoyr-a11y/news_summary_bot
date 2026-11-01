@@ -44,7 +44,7 @@ def build_prompt(headlines: dict[str, list[str]]) -> str:
         lines = "\n".join(f"- {t}" for t in titles)
         blocks.append(f"## {name}(本文: {paywall[name]})\n{lines}")
     body = "\n\n".join(blocks)
-    # データを先、依頼を最後に置く
+
     return f"""本日は{datetime.datetime.now():%Y-%m-%d}です。各見出しの先頭の[ ]は発行日時です。\n\n{body}\n\n---\n上記の見出しを、指示された形式で日本語で要約してください。"""
 
 
