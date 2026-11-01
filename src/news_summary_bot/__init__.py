@@ -3,7 +3,7 @@ import sys
 from datetime import datetime
 from pathlib import Path
 
-from news_summary_bot.main import build_prompt, collect_headlines, summarize, upload_md
+from news_summary_bot.main import build_prompt, collect_headlines, summarize
 
 
 def main() -> None:
@@ -20,5 +20,3 @@ def main() -> None:
         encoding="utf-8",
     )
     print(f"\n保存しました: {out}")
-    # web_view_link = upload_md(out)
-    # print(f"\n保存しました: {web_view_link}")
