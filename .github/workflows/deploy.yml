@@ -1,0 +1,41 @@
+name: Build & deploy web
+
+on:
+  workflow_run:                     # digest更新(コミット)が成功したら再ビルド
+    workflows: ["Daily market digest"]
+    types: [completed]
+  push:                             # Webのコードを直接変更したとき
+    paths: ["web/**"]
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    # digestワークフローが失敗した場合はスキップ
+    if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4    # workflow_run では既定ブランチの最新(=digestコミット後)を取得
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10            # ローカルの pnpm のメジャーバージョンに合わせる
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: web/pnpm-lock.yaml
+
+      - name: Build
+        working-directory: web
+        run: |
+          pnpm install --frozen-lockfile   # pnpm-lock.yaml をコミットしておくこと
+          pnpm run build
+
+      - name: Deploy to Cloudflare Pages
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: pages deploy web/dist --project-name=news-summary-bot
