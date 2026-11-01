@@ -1,0 +1,226 @@
+---
+import { getCollection } from 'astro:content';
+import type { CollectionEntry } from 'astro:content';
+
+// Newest first, like a real timeline
+const digests = (await getCollection('digests')).sort(
+	(a, b) => +new Date(b.data.pubDate) - +new Date(a.data.pubDate)
+);
+
+// Formatted in the build machine's local zone, which matches how "2026-11-01 01:52" is parsed
+const fmt = new Intl.DateTimeFormat('ja-JP', {
+	year: 'numeric',
+	month: 'numeric',
+	day: 'numeric',
+	hour: '2-digit',
+	minute: '2-digit',
+});
+---
+
+<!-- Replace your existing <section id="digests"> with this block -->
+<section id="digests" aria-label="Digests">
+	{digests.map((digest: CollectionEntry<'digests'>) => (
+			<article class="post">
+				<div class="avatar" aria-hidden="true">
+					<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+						<path d="M3 17 9 11l4 4 8-8" />
+						<path d="M15 7h6v6" />
+					</svg>
+				</div>
+
+				<div class="body">
+					<p class="byline">
+						<span class="name">Market Digest</span>
+						<span class="handle">@{digest.id}</span>
+						<time class="time" datetime={new Date(digest.data.pubDate).toISOString()}>{fmt.format(new Date(digest.data.pubDate))}</time>
+					</p>
+
+					<h2 class="title">
+						<a href={`digests/${digest.id}`}>{digest.data.title}</a>
+					</h2>
+
+					<p class="description">{digest.data.description}</p>
+
+					<p class="more" aria-hidden="true">
+						続きを読む
+						<svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+							<path d="M6 3.5 10.5 8 6 12.5" />
+						</svg>
+					</p>
+				</div>
+			</article>
+		))}
+</section>
+
+<style>
+	#digests {
+		--surface: #ffffff;
+		--ink: #1d2433;
+		--muted: #5d6678;
+		--line: #d5dbe6;
+		--accent: #2f5bea;
+		--pad: 1rem;
+		--rail: 3rem;
+
+		max-width: 40rem;
+		margin: 2rem auto;
+		background: var(--surface);
+		border: 1px solid var(--line);
+		border-radius: 1rem;
+		overflow: hidden;
+		font-family: system-ui, -apple-system, 'Hiragino Sans', 'Yu Gothic UI', 'Noto Sans JP', sans-serif;
+		color: var(--ink);
+		word-break: auto-phrase;
+		overflow-wrap: anywhere;
+	}
+
+	@media (prefers-color-scheme: dark) {
+		#digests {
+			--surface: #1a1f2a;
+			--ink: #e8ebf2;
+			--muted: #98a1b3;
+			--line: #2a3140;
+			--accent: #7d9bff;
+		}
+	}
+
+	.post {
+		position: relative;
+		display: grid;
+		grid-template-columns: var(--rail) minmax(0, 1fr);
+		column-gap: 0.875rem;
+		padding: var(--pad) var(--pad) 1.25rem;
+		transition: background-color 0.15s ease;
+	}
+	.post:hover {
+		background: color-mix(in srgb, var(--accent) 5%, var(--surface));
+	}
+
+	/* Thread line connecting avatars */
+	.post::before {
+		content: '';
+		position: absolute;
+		left: calc(var(--pad) + var(--rail) / 2 - 1px);
+		top: 0;
+		bottom: 0;
+		width: 2px;
+		background: var(--line);
+		z-index: 0;
+	}
+	.post:first-child::before {
+		top: calc(var(--pad) + var(--rail) / 2);
+	}
+	.post:last-child::before {
+		bottom: auto;
+		height: calc(var(--pad) + var(--rail) / 2);
+	}
+	.post:only-child::before {
+		display: none;
+	}
+
+	.avatar {
+		position: relative;
+		z-index: 1;
+		display: grid;
+		place-items: center;
+		width: var(--rail);
+		height: var(--rail);
+		border-radius: 50%;
+		color: #fff;
+		background: var(--accent);
+		box-shadow: 0 0 0 4px var(--surface);
+		transition: box-shadow 0.15s ease;
+	}
+	.post:hover .avatar {
+		box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent) 5%, var(--surface));
+	}
+
+	.body {
+		min-width: 0;
+	}
+
+	.byline {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: baseline;
+		gap: 0.15rem 0.5rem;
+		margin: 0.15rem 0 0.25rem;
+		font-size: 0.875rem;
+	}
+	.name {
+		font-weight: 650;
+	}
+	.handle,
+	.time {
+		color: var(--muted);
+	}
+	.handle {
+		min-width: 0;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+	.time {
+		margin-left: auto;
+		font-variant-numeric: tabular-nums;
+		white-space: nowrap;
+	}
+
+	.title {
+		margin: 0 0 0.35rem;
+		font-size: 1.15rem;
+		line-height: 1.4;
+		letter-spacing: -0.01em;
+	}
+	.title a {
+		color: inherit;
+		text-decoration: none;
+	}
+	/* Whole post is clickable */
+	.title a::after {
+		content: '';
+		position: absolute;
+		inset: 0;
+		z-index: 2;
+	}
+	.title a:focus-visible {
+		outline: none;
+	}
+	.title a:focus-visible::after {
+		outline: 2px solid var(--accent);
+		outline-offset: -2px;
+	}
+
+	.description {
+		margin: 0;
+		color: var(--muted);
+		line-height: 1.7;
+		font-size: 0.95rem;
+	}
+
+	.more {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.25rem;
+		margin: 0.75rem 0 0;
+		font-size: 0.875rem;
+		font-weight: 600;
+		color: var(--accent);
+	}
+
+	@media (max-width: 480px) {
+		#digests {
+			--rail: 2.5rem;
+			margin: 0;
+			border-radius: 0;
+			border-inline: 0;
+		}
+	}
+
+	@media (prefers-reduced-motion: reduce) {
+		.post,
+		.avatar {
+			transition: none;
+		}
+	}
+</style>

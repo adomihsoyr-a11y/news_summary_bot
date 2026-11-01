@@ -1,6 +1,11 @@
 ---
 import astroLogo from '../assets/astro.svg';
 import background from '../assets/background.svg';
+import DigestTimeline from './DigestTimeline.astro';
+import { getCollection } from 'astro:content';
+import type { CollectionEntry } from 'astro:content';
+const digests = await getCollection('digests');
+
 ---
 
 <div id="container">
@@ -32,6 +37,7 @@ import background from '../assets/background.svg';
 				</a>
 			</section>
 		</section>
+		<DigestTimeline digests={digests} />
 	</main>
 
 	<a href="https://astro.build/blog/astro-7/" id="news" class="box">
@@ -67,8 +73,6 @@ import background from '../assets/background.svg';
 
 	main {
 		height: 100%;
-		display: flex;
-		justify-content: center;
 	}
 
 	#hero {

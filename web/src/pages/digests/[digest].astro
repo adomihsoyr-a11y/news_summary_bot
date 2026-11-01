@@ -1,0 +1,301 @@
+---
+import { getCollection, render } from 'astro:content';
+import Layout from '../../layouts/Layout.astro';
+
+export async function getStaticPaths() {
+  const digests = await getCollection('digests');
+
+  return digests.map((digest) => ({
+    params: { digest: digest.id },
+    props: { digest },
+  }));
+}
+
+const { digest } = Astro.props;
+const { Content } = await render(digest);
+
+const date = new Date(digest.data.pubDate);
+const fmt = new Intl.DateTimeFormat('ja-JP', {
+  year: 'numeric',
+  month: 'numeric',
+  day: 'numeric',
+  hour: '2-digit',
+  minute: '2-digit',
+});
+---
+
+<Layout>
+  <main class="detail">
+    <nav class="topbar">
+      <a class="back" href="/">
+        <svg viewBox="0 0 16 16" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M10 3.5 5.5 8 10 12.5" />
+        </svg>
+        一覧に戻る
+      </a>
+    </nav>
+
+    <article class="post">
+      <header class="author">
+        <div class="avatar" aria-hidden="true">
+          <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M3 17 9 11l4 4 8-8" />
+            <path d="M15 7h6v6" />
+          </svg>
+        </div>
+        <div class="who">
+          <p class="name">Market Digest</p>
+          <p class="handle">@{digest.id}</p>
+        </div>
+      </header>
+
+      <h1 class="title">{digest.data.title}</h1>
+      <p class="description">{digest.data.description}</p>
+
+      <p class="stamp">
+        <time datetime={date.toISOString()}>{fmt.format(date)}</time>
+      </p>
+
+      <div class="prose">
+        <Content />
+      </div>
+
+      <footer class="actions">
+        <button type="button" class="copy" data-copy>
+          <svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M6.5 9.5a3 3 0 0 0 4.2 0l2-2a3 3 0 0 0-4.2-4.2l-.8.8" />
+            <path d="M9.5 6.5a3 3 0 0 0-4.2 0l-2 2a3 3 0 0 0 4.2 4.2l.8-.8" />
+          </svg>
+          <span data-copy-label>リンクをコピー</span>
+        </button>
+      </footer>
+    </article>
+  </main>
+</Layout>
+
+<script>
+  const button = document.querySelector<HTMLButtonElement>('[data-copy]');
+  const label = document.querySelector<HTMLElement>('[data-copy-label]');
+
+  button?.addEventListener('click', async () => {
+    if (!label) return;
+    try {
+      await navigator.clipboard.writeText(location.href);
+      label.textContent = 'コピーしました';
+    } catch {
+      label.textContent = 'コピーできませんでした';
+    }
+    setTimeout(() => (label.textContent = 'リンクをコピー'), 2000);
+  });
+</script>
+
+<style>
+  .detail {
+    --surface: #ffffff;
+    --ink: #1d2433;
+    --muted: #5d6678;
+    --line: #d5dbe6;
+    --accent: #2f5bea;
+
+    max-width: 42rem;
+    margin: 0 auto 3rem;
+    color: var(--ink);
+    font-family: system-ui, -apple-system, 'Hiragino Sans', 'Yu Gothic UI', 'Noto Sans JP', sans-serif;
+    word-break: auto-phrase;
+    overflow-wrap: anywhere;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    .detail {
+      --surface: #1a1f2a;
+      --ink: #e8ebf2;
+      --muted: #98a1b3;
+      --line: #2a3140;
+      --accent: #7d9bff;
+    }
+  }
+
+  /* Sticky back bar */
+  .topbar {
+    position: sticky;
+    top: 0;
+    z-index: 10;
+    padding: 0.75rem 1rem;
+    background: color-mix(in srgb, var(--surface) 88%, transparent);
+    backdrop-filter: blur(10px);
+    border-bottom: 1px solid var(--line);
+  }
+  .back {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    padding: 0.25rem 0.6rem 0.25rem 0.35rem;
+    border-radius: 999px;
+    color: var(--ink);
+    font-weight: 600;
+    font-size: 0.95rem;
+    text-decoration: none;
+    transition: background-color 0.15s ease;
+  }
+  .back:hover {
+    background: color-mix(in srgb, var(--accent) 10%, transparent);
+  }
+  .back:focus-visible,
+  .copy:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+  }
+
+  .post {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-top: 0;
+    padding: 1.25rem 1.25rem 1rem;
+  }
+
+  /* Author row */
+  .author {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    margin-bottom: 1rem;
+  }
+  .avatar {
+    display: grid;
+    place-items: center;
+    flex: none;
+    width: 3rem;
+    height: 3rem;
+    border-radius: 50%;
+    color: #fff;
+    background: var(--accent);
+  }
+  .who p {
+    margin: 0;
+    line-height: 1.3;
+  }
+  .name {
+    font-weight: 650;
+  }
+  .handle {
+    color: var(--muted);
+    font-size: 0.9rem;
+  }
+
+  .title {
+    margin: 0 0 0.5rem;
+    font-size: 1.6rem;
+    line-height: 1.35;
+    letter-spacing: -0.01em;
+  }
+  .description {
+    margin: 0;
+    color: var(--muted);
+    font-size: 1.05rem;
+    line-height: 1.7;
+  }
+  .stamp {
+    margin: 1rem 0 0;
+    padding-bottom: 1rem;
+    border-bottom: 1px solid var(--line);
+    color: var(--muted);
+    font-size: 0.875rem;
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* Rendered markdown. :global is needed because <Content /> output is not scoped. */
+  .prose {
+    padding-top: 0.5rem;
+    font-size: 1rem;
+    line-height: 1.85;
+  }
+  /* The markdown's own H1 repeats the title above */
+  .prose :global(h1) {
+    display: none;
+  }
+  .prose :global(h3) {
+    margin: 2rem 0 0.75rem;
+    font-size: 1.25rem;
+    line-height: 1.4;
+  }
+  .prose :global(h4) {
+    margin: 1.5rem 0 0.5rem;
+    padding-left: 0.6rem;
+    border-left: 3px solid var(--accent);
+    font-size: 1.05rem;
+    line-height: 1.4;
+  }
+  .prose :global(p) {
+    margin: 0.75rem 0;
+  }
+  .prose :global(ul),
+  .prose :global(ol) {
+    margin: 0.5rem 0;
+    padding-left: 1.4rem;
+  }
+  .prose :global(li) {
+    margin: 0.4rem 0;
+  }
+  .prose :global(li > ul) {
+    margin: 0.25rem 0;
+  }
+  .prose :global(li::marker) {
+    color: var(--muted);
+  }
+  .prose :global(strong) {
+    font-weight: 650;
+  }
+  .prose :global(em) {
+    color: var(--muted);
+  }
+  .prose :global(hr) {
+    margin: 2rem 0;
+    border: 0;
+    border-top: 1px solid var(--line);
+  }
+  .prose :global(a) {
+    color: var(--accent);
+  }
+
+  /* Action bar */
+  .actions {
+    margin-top: 1.5rem;
+    padding-top: 0.75rem;
+    border-top: 1px solid var(--line);
+  }
+  .copy {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.4rem 0.8rem;
+    border: 1px solid var(--line);
+    border-radius: 999px;
+    background: transparent;
+    color: var(--ink);
+    font: inherit;
+    font-size: 0.875rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background-color 0.15s ease;
+  }
+  .copy:hover {
+    background: color-mix(in srgb, var(--accent) 8%, transparent);
+  }
+
+  @media (max-width: 480px) {
+    .post {
+      border-inline: 0;
+      padding-inline: 1rem;
+    }
+    .title {
+      font-size: 1.4rem;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .back,
+    .copy {
+      transition: none;
+    }
+  }
+</style>
