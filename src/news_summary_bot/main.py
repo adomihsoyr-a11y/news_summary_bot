@@ -1,64 +1,22 @@
 """経済・市場メディアの無料見出しを集め、Gemini無料APIで日本語要約するスクリプト。"""
 
-import os
+import datetime
+import json
 import sys
 
 import feedparser
 import requests
 from bs4 import BeautifulSoup
-from google import genai
+
+from news_summary_bot.llm_controler import DigestOutput
+
+from .sources import SOURCES
 
 MAX_PER_SOURCE = 15
 HEADERS = {
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
     "(KHTML, like Gecko) Chrome/124.0 Safari/537.36"
 }
-
-# name, RSS(優先), トップページ(フォールバック), 本文の無料度
-SOURCES = [
-    {
-        "name": "Bloomberg",
-        "rss": "https://feeds.bloomberg.com/markets/news.rss",
-        "web": "https://www.bloomberg.com/markets",
-        "paywall": "原則有料",
-    },
-    {
-        "name": "WSJ",
-        "rss": "https://feeds.content.dowjones.io/public/rss/RSSMarketsMain",
-        "web": "https://www.wsj.com/news/latest-headlines",
-        "paywall": "ほぼ有料",
-    },
-    {
-        "name": "Financial Times",
-        "rss": "https://www.ft.com/rss/home",
-        "web": "https://www.ft.com/markets",
-        "paywall": "有料",
-    },
-    {
-        "name": "The Economist",
-        "rss": "https://www.economist.com/finance-and-economics/rss.xml",
-        "web": "https://www.economist.com/",
-        "paywall": "有料",
-    },
-    {
-        "name": "CNBC",
-        "rss": "https://www.cnbc.com/id/100003114/device/rss/rss.html",
-        "web": "https://www.cnbc.com/",
-        "paywall": "多く無料",
-    },
-    {
-        "name": "MarketWatch",
-        "rss": "https://feeds.content.dowjones.io/public/rss/mw_topstories",
-        "web": "https://www.marketwatch.com/",
-        "paywall": "多く無料",
-    },
-    {
-        "name": "Investing.com日本版",
-        "rss": "https://jp.investing.com/rss/news.rss",
-        "web": "https://jp.investing.com/news/",
-        "paywall": "多く無料",
-    },
-]
 
 
 def fetch_rss(url: str) -> list[str]:
@@ -106,58 +64,14 @@ def collect_headlines() -> dict[str, list[str]]:
     return result
 
 
-def build_prompt(headlines: dict[str, list[str]]) -> str:
-    paywall = {s["name"]: s["paywall"] for s in SOURCES}
-    blocks = []
-    for name, titles in headlines.items():
-        lines = "\n".join(f"- {t}" for t in titles)
-        blocks.append(f"## {name}(本文: {paywall[name]})\n{lines}")
-    body = "\n\n".join(blocks)
-    return f"""あなたは金融市場に詳しいアナリストです。以下は各メディアの本日の見出しです。
-見出しのみから分かる範囲で、日本語で次の形式にまとめてください。見出しにない事実は推測で補わないこと。
-
-1. 今日の全体像(3〜5行)
-2. 主要テーマ別の整理(株式 / 金利・中央銀行 / 為替・商品 / 地政学・政策 / その他)
-   - 複数媒体で共通して扱われている話題には【複数媒体】と付ける
-3. 媒体ごとの特徴・注目見出し(各1〜2行。英語見出しは日本語訳を添える)
-4. 今日注目すべきポイント(箇条書き3つ)
-
-{body}
-"""
-
-
-import random
-import re
-import time
-
-NON_RETRYABLE = {400, 401, 403, 404}  # 再試行しても直らないエラー
-
-
-def with_retry(fn, max_attempts: int = 6):
-    """503/429/通信エラーなどを、待ちを伸ばしながら再試行する。"""
-    for attempt in range(max_attempts):
-        try:
-            return fn()
-        except Exception as e:
-            m = re.search(r"Error code: (\d{3})", str(e))
-            code = getattr(e, "status_code", None) or (int(m.group(1)) if m else None)
-            if code in NON_RETRYABLE or attempt == max_attempts - 1:
-                raise
-            wait = 10 * 2**attempt + random.uniform(0, 5)  # 約10, 20, 40, 80, 160秒
-            print(
-                f"[WARN] {type(e).__name__} (code={code})。{wait:.0f}秒後に再試行 ({attempt + 1}/{max_attempts - 1})"
-            )
-            time.sleep(wait)
-
-
-def summarize(prompt: str) -> str:
-    api_key = os.getenv("GEMINI_API_KEY")
-    if not api_key:
-        sys.exit("GEMINI_API_KEY が未設定です (.env を確認してください)")
-    model = os.getenv("GEMINI_MODEL", "gemini-3.8-flash")
-    client = genai.Client(api_key=api_key)
-    interaction = with_retry(
-        lambda: client.interactions.create(model=model, input=prompt)
+def build_frontmatter(now: datetime.datetime, content: DigestOutput) -> str:
+    """Astro用フロントマター。値はJSON文字列で引用するので、コロンや引用符を含んでもYAMLが壊れない。"""
+    q = lambda v: json.dumps(v, ensure_ascii=False)
+    return (
+        "---\n"
+        f"title: {q(f'{now:%Y-%m-%d} {content.title}')}\n"
+        f"description: {q(content.description)}\n"
+        f"pubDate: {now:%Y-%m-%d %H:%M}\n"
+        "---\n\n"
+        f"{content.body}\n"
     )
-
-    return interaction.output_text
