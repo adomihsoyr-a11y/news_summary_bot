@@ -2,15 +2,17 @@
 
 import datetime
 import json
+import os
 import sys
 
 import feedparser
 import requests
 from bs4 import BeautifulSoup
+from dotenv import load_dotenv
 
 from news_summary_bot.llm_controler import DigestOutput
 
-from .sources import SOURCES
+from .sources import Source
 
 MAX_PER_SOURCE = 15
 HEADERS = {
@@ -40,9 +42,9 @@ def fetch_web(url: str) -> list[str]:
     return titles
 
 
-def collect_headlines() -> dict[str, list[str]]:
+def collect_headlines(sources: list[Source]) -> dict[str, list[str]]:
     result = {}
-    for src in SOURCES:
+    for src in sources:
         titles: list[str] = []
         for label, func, url in (
             ("RSS", fetch_rss, src["rss"]),
@@ -67,6 +69,7 @@ def collect_headlines() -> dict[str, list[str]]:
 def build_frontmatter(now: datetime.datetime, content: DigestOutput) -> str:
     """Astro用フロントマター。値はJSON文字列で引用するので、コロンや引用符を含んでもYAMLが壊れない。"""
     q = lambda v: json.dumps(v, ensure_ascii=False)
+
     return (
         "---\n"
         f"title: {q(f'{now:%Y-%m-%d} {content.title}')}\n"
@@ -75,3 +78,9 @@ def build_frontmatter(now: datetime.datetime, content: DigestOutput) -> str:
         "---\n\n"
         f"{content.body}\n"
     )
+
+
+def load_local_env() -> None:
+    if os.getenv("GITHUB_ACTIONS") == "true" or os.getenv("CI") == "true":
+        return
+    load_dotenv()

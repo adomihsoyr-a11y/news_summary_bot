@@ -4,10 +4,11 @@ import datetime
 import os
 import sys
 
+import tiktoken
 from google import genai
 from pydantic import BaseModel, Field
 
-from .sources import SOURCES
+from .sources import Source
 
 SYSTEM_INSTRUCTION = """あなたは金融市場に詳しいアナリストです。
 ユーザーが渡す各メディアの見出し一覧を、見出しから分かる範囲だけで日本語に要約してください。
@@ -37,15 +38,22 @@ class DigestOutput(BaseModel):
     )
 
 
-def build_prompt(headlines: dict[str, list[str]]) -> str:
-    paywall = {s["name"]: s["paywall"] for s in SOURCES}
+def build_prompt(
+    headlines: dict[str, list[str]], now: datetime.datetime, sources: list[Source]
+) -> str:
+    paywall = {s["name"]: s["paywall"] for s in sources}
     blocks = []
     for name, titles in headlines.items():
         lines = "\n".join(f"- {t}" for t in titles)
         blocks.append(f"## {name}(本文: {paywall[name]})\n{lines}")
     body = "\n\n".join(blocks)
+    enc = tiktoken.get_encoding("o200k_base")
 
-    return f"""本日は{datetime.datetime.now():%Y-%m-%d}です。各見出しの先頭の[ ]は発行日時です。\n\n{body}\n\n---\n上記の見出しを、指示された形式で日本語で要約してください。"""
+    prompt = f"""本日は{now:%Y-%m-%d}です。各見出しの先頭の[ ]は発行日時です。\n\n{body}\n\n---\n上記の見出しを、指示された形式で日本語で要約してください。"""
+    print(
+        f"[INFO] プロンプト概算: {len(enc.encode(prompt)):,} tokens / {len(prompt):,} 文字"
+    )
+    return prompt
 
 
 import random
@@ -54,12 +62,45 @@ import time
 
 NON_RETRYABLE = {400, 401, 403, 404}  # 再試行しても直らないエラー
 
+import threading
+from contextlib import contextmanager
+
+
+@contextmanager
+def heartbeat(label: str, interval: float = 10.0):
+    """ブロックの実行中、interval秒ごとに経過時間を表示する。"""
+    stop = threading.Event()
+    start = time.monotonic()
+
+    def _run():
+        while not stop.wait(interval):
+            print(
+                f"[INFO] {label} 待機中... {time.monotonic() - start:.0f}秒経過",
+                flush=True,
+            )
+
+    t = threading.Thread(target=_run, daemon=True)
+    t.start()
+    try:
+        yield
+    except BaseException:
+        print(f"[INFO] {label} 失敗 ({time.monotonic() - start:.1f}秒)", flush=True)
+        raise
+    else:
+        print(f"[INFO] {label} 完了 ({time.monotonic() - start:.1f}秒)", flush=True)
+    finally:
+        stop.set()
+        t.join()
+
 
 def with_retry(fn, max_attempts: int = 6):
     """503/429/通信エラーなどを、待ちを伸ばしながら再試行する。"""
     for attempt in range(max_attempts):
         try:
-            return fn()
+            label = f"API呼び出し (試行 {attempt + 1}/{max_attempts})"
+            print(f"[INFO] {label} 開始", flush=True)
+            with heartbeat(label):
+                return fn()
         except Exception as e:
             m = re.search(r"Error code: (\d{3})", str(e))
             code = getattr(e, "status_code", None) or (int(m.group(1)) if m else None)

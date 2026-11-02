@@ -13,6 +13,7 @@ dependencies = [
     "google-genai>=1.0.0",
     "python-dotenv>=1.2.4",
     "requests>=2.31",
+    "tavily-python>=0.8.5",
 ]
 
 [project.scripts]
@@ -21,3 +22,8 @@ news-summary-bot = "news_summary_bot:main"
 [build-system]
 requires = ["uv_build>=0.13.1,<0.14.0"]
 build-backend = "uv_build"
+
+[dependency-groups]
+dev = [
+    "pytest>=9.2.0",
+]
