@@ -27,6 +27,7 @@ def out_file(file_name: str, content: str) -> None:
 
 def summarize_jp():
     """日本ニュースを要約する。"""
+    load_local_env()
     headlines = collect_headlines(JP_SOURCES)
     if not headlines:
         sys.exit("見出しを1件も取得できませんでした")
@@ -39,6 +40,7 @@ def summarize_jp():
 
 def summarize_en():
     """USニュースを要約する。"""
+    load_local_env()
     headlines = collect_headlines(US_SOURCES)
     if not headlines:
         sys.exit("見出しを1件も取得できませんでした")
@@ -50,6 +52,5 @@ def summarize_en():
 
 
 def main() -> None:
-    load_local_env()
     summarize_jp()
     summarize_en()

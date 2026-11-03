@@ -18,6 +18,8 @@ dependencies = [
 
 [project.scripts]
 news-summary-bot = "news_summary_bot:main"
+get-jp-summary = "news_summary_bot:summarize_jp"
+get-en-summary = "news_summary_bot:summarize_en"
 
 [build-system]
 requires = ["uv_build>=0.13.1,<0.14.0"]

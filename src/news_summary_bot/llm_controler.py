@@ -6,6 +6,7 @@ import sys
 
 import tiktoken
 from google import genai
+from google.genai.types import Model
 from pydantic import BaseModel, Field
 
 from .sources import Source
@@ -56,7 +57,6 @@ def build_prompt(
     return prompt
 
 
-import random
 import re
 import time
 
@@ -93,34 +93,138 @@ def heartbeat(label: str, interval: float = 10.0):
         t.join()
 
 
-def with_retry(fn, max_attempts: int = 6):
-    """503/429/通信エラーなどを、待ちを伸ばしながら再試行する。"""
-    for attempt in range(max_attempts):
+class AttemptTimeout(Exception):
+    """1回の試行が switch_after 秒を超えた。"""
+
+
+def run_with_timeout(fn, timeout: float):
+    """fn を別スレッドで実行し、timeout 秒で待つのをやめる。"""
+    box: dict = {}
+    done = threading.Event()
+
+    def _target():
         try:
-            label = f"API呼び出し (試行 {attempt + 1}/{max_attempts})"
-            print(f"[INFO] {label} 開始", flush=True)
+            box["value"] = fn()
+        except Exception as e:
+            box["error"] = e
+        finally:
+            done.set()
+
+    threading.Thread(target=_target, daemon=True).start()
+    if not done.wait(timeout):
+        raise AttemptTimeout(f"{timeout:.0f}秒以内に応答がありませんでした")
+    if "error" in box:
+        raise box["error"]
+    return box["value"]
+
+
+def with_retry(
+    call, models: list[str], max_attempts: int = 6, switch_after: float = 120.0
+):
+    """
+    call(model) を実行する。
+    - switch_after 秒応答がなければ次のモデルに切り替えて即再試行
+    - 503/429/通信エラーも待ちを伸ばしながら同じモデルで再試行
+    """
+    model_idx = 0
+    for attempt in range(max_attempts):
+        model = models[model_idx % len(models)]
+        label = f"API呼び出し [{model}] (試行 {attempt + 1}/{max_attempts})"
+        print(f"[INFO] {label} 開始", flush=True)
+        try:
             with heartbeat(label):
-                return fn()
+                return run_with_timeout(lambda m=model: call(m), switch_after)
+        except AttemptTimeout:
+            if attempt == max_attempts - 1:
+                raise
+            model_idx += 1
+            nxt = models[model_idx % len(models)]
+            print(
+                f"[WARN] {model} が{switch_after:.0f}秒応答なし。{nxt} に切り替えます",
+                flush=True,
+            )
+            continue  # 待たずに即再試行
         except Exception as e:
             m = re.search(r"Error code: (\d{3})", str(e))
             code = getattr(e, "status_code", None) or (int(m.group(1)) if m else None)
             if code in NON_RETRYABLE or attempt == max_attempts - 1:
                 raise
-            wait = 10 * 2**attempt + random.uniform(0, 5)  # 約10, 20, 40, 80, 160秒
+            model_idx += 1
+            nxt = models[model_idx % len(models)]
             print(
-                f"[WARN] {type(e).__name__} (code={code})。{wait:.0f}秒後に再試行 ({attempt + 1}/{max_attempts - 1})"
+                f"[WARN] {model} が{switch_after:.0f}秒応答なし。{nxt} に切り替えます",
+                flush=True,
             )
-            time.sleep(wait)
+            continue  # 待たずに即再試行
+
+
+def version_key(model):
+    match = re.match(r"gemini-(\d+(?:\.\d+)?)(?:-|$)", model)
+    if match:
+        return (1, tuple(map(int, match.group(1).split("."))))
+    return (0, ())  # non-versioned Gemini models go last
+
+
+def list_models() -> list[str]:
+    """モデルをリストする。"""
+    client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
+    EXCLUDE = (
+        "image",
+        "tts",
+        "lyria",
+        "nano-banana",
+        "transcribe",
+        "omni",
+        "robotics",
+        "computer-use",
+        "customtools",
+        "antigravity",
+        "argon",
+        "gemini-3.7-flash",
+    )
+
+    text_models: list[str] = []
+    for m in client.models.list():
+        name = m.name.removeprefix("models/")
+        if "generateContent" not in (m.supported_actions or []):
+            continue
+        if any(x in name.lower() for x in EXCLUDE):
+            continue
+        text_models.append(name)
+
+    text_models = sorted(text_models, key=version_key, reverse=True)
+
+    return text_models
+
+
+# def with_retry(fn, max_attempts: int = 6):
+#     """503/429/通信エラーなどを、待ちを伸ばしながら再試行する。"""
+#     for attempt in range(max_attempts):
+#         try:
+#             label = f"API呼び出し (試行 {attempt + 1}/{max_attempts})"
+#             print(f"[INFO] {label} 開始", flush=True)
+#             with heartbeat(label):
+#                 return fn()
+#         except Exception as e:
+#             m = re.search(r"Error code: (\d{3})", str(e))
+#             code = getattr(e, "status_code", None) or (int(m.group(1)) if m else None)
+#             if code in NON_RETRYABLE or attempt == max_attempts - 1:
+#                 raise
+#             wait = 10 * 2**attempt + random.uniform(0, 5)  # 約10, 20, 40, 80, 160秒
+#             print(
+#                 f"[WARN] {type(e).__name__} (code={code})。{wait:.0f}秒後に再試行 ({attempt + 1}/{max_attempts - 1})"
+#             )
+#             time.sleep(wait)
 
 
 def summarize(prompt: str) -> DigestOutput:
     api_key = os.getenv("GEMINI_API_KEY")
     if not api_key:
         sys.exit("GEMINI_API_KEY が未設定です (.env を確認してください)")
-    model = os.getenv("GEMINI_MODEL", "gemini-3.8-flash")
     client = genai.Client(api_key=api_key)
-    interaction = with_retry(
-        lambda: client.interactions.create(
+
+    def call(model: str):
+        return client.interactions.create(
             model=model,
             input=prompt,
             system_instruction=SYSTEM_INSTRUCTION,
@@ -130,6 +234,6 @@ def summarize(prompt: str) -> DigestOutput:
                 "schema": DigestOutput.model_json_schema(),
             },
         )
-    )
 
+    interaction = with_retry(call, list_models(), switch_after=100.0)
     return DigestOutput.model_validate_json(interaction.output_text)
