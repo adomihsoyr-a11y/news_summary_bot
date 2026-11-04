@@ -1,64 +1,126 @@
 ---
-import { getCollection } from 'astro:content';
-import type { CollectionEntry } from 'astro:content';
+import { getCollection } from "astro:content";
 
-const digests = (await getCollection('digests')).sort(
-	(a, b) => +new Date(b.data.pubDate) - +new Date(a.data.pubDate)
+const digests = (await getCollection("digests")).sort(
+	(a, b) => +new Date(b.data.pubDate) - +new Date(a.data.pubDate),
 );
 
-const fmt = new Intl.DateTimeFormat('ja-JP', {
-	year: 'numeric',
-	month: 'numeric',
-	day: 'numeric',
-	hour: '2-digit',
-	minute: '2-digit',
+const fmt = new Intl.DateTimeFormat("ja-JP", {
+	year: "numeric",
+	month: "numeric",
+	day: "numeric",
+	hour: "2-digit",
+	minute: "2-digit",
 });
 const getLang = (id: string) => id.split(/[\/_]/)[0];
+
+const TZ = "Asia/Tokyo";
+const dayKey = (d: Date) => d.toLocaleDateString("sv-SE", { timeZone: TZ }); // "YYYY-MM-DD"
+const dayFmt = new Intl.DateTimeFormat("ja-JP", {
+	timeZone: TZ,
+	year: "numeric",
+	month: "long",
+	day: "numeric",
+	weekday: "short",
+});
 ---
 
 <section id="digests" aria-label="Digests">
-	{digests.map((digest: CollectionEntry<'digests'>) => (
-			<article class="post">
-				<div class="avatar" aria-hidden="true">
-					{getLang(digest.id) === 'en' && (
-						<svg viewBox="0 0 19 10" width="22" height="22" preserveAspectRatio="xMidYMid slice">
-							<rect width="19" height="10" fill="#fff" />
-							{[0, 2, 4, 6, 8].map((i) => (
-								<rect y={i * (10 / 9) * 1} width="19" height={10 / 9} fill="#B22234" />
-							))}
-							<rect width="7.6" height="5.4" fill="#3C3B6E" />
-						</svg>
+	{
+		digests.map((digest, i) => {
+			const date = new Date(digest.data.pubDate);
+			const prev = digests[i - 1];
+			const showDay =
+				i === 0 || dayKey(date) !== dayKey(new Date(prev.data.pubDate));
+
+			return (
+				<>
+					{showDay && (
+						<div class="day-separator" role="separator">
+							<span>{dayFmt.format(date)}</span>
+						</div>
 					)}
-					{getLang(digest.id) === 'jp' && (
-						<svg viewBox="0 0 3 2" width="22" height="22" preserveAspectRatio="xMidYMid slice">
-							<rect width="3" height="2" fill="#fff" />
-							<circle cx="1.5" cy="1" r="0.6" fill="#BC002D" />
-						</svg>
-					)}
-				</div>
 
-				<div class="body">
-					<p class="byline">
-						<span class="name">Market Digest</span>
-						<span class="handle">@{digest.id}</span>
-						<time class="time" datetime={new Date(digest.data.pubDate).toISOString()}>{fmt.format(new Date(digest.data.pubDate))}</time>
-					</p>
+					<article class="post">
+						<div class="avatar" aria-hidden="true">
+							{getLang(digest.id) === "en" && (
+								<svg
+									viewBox="0 0 19 10"
+									preserveAspectRatio="xMinYMid slice"
+								>
+									<rect width="19" height="10" fill="#fff" />
+									{[0, 2, 4, 6, 8].map((n) => (
+										<rect
+											y={n * (10 / 9)}
+											width="19"
+											height={10 / 9}
+											fill="#B22234"
+										/>
+									))}
+									<rect
+										width="7.6"
+										height="5.4"
+										fill="#3C3B6E"
+									/>
+								</svg>
+							)}
+							{getLang(digest.id) === "jp" && (
+								<svg
+									viewBox="0 0 3 2"
+									preserveAspectRatio="xMidYMid slice"
+								>
+									<rect width="3" height="2" fill="#fff" />
+									<circle
+										cx="1.5"
+										cy="1"
+										r="0.6"
+										fill="#BC002D"
+									/>
+								</svg>
+							)}
+						</div>
 
-					<h2 class="title">
-						<a href={`digests/${digest.id}`}>{digest.data.title}</a>
-					</h2>
+						<div class="body">
+							<p class="byline">
+								<span class="name">Market Digest</span>
+								<span class="handle">@{digest.id}</span>
+								<time
+									class="time"
+									datetime={date.toISOString()}
+								>
+									{fmt.format(date)}
+								</time>
+							</p>
 
-					<p class="description">{digest.data.description}</p>
+							<h2 class="title">
+								<a href={`digests/${digest.id}`}>
+									{digest.data.title}
+								</a>
+							</h2>
 
-					<p class="more" aria-hidden="true">
-						続きを読む
-						<svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
-							<path d="M6 3.5 10.5 8 6 12.5" />
-						</svg>
-					</p>
-				</div>
-			</article>
-		))}
+							<p class="description">{digest.data.description}</p>
+
+							<p class="more" aria-hidden="true">
+								続きを読む
+								<svg
+									viewBox="0 0 16 16"
+									width="14"
+									height="14"
+									fill="none"
+									stroke="currentColor"
+									stroke-width="1.75"
+									stroke-linecap="round"
+									stroke-linejoin="round"
+								>
+									<path d="M6 3.5 10.5 8 6 12.5" />
+								</svg>
+							</p>
+						</div>
+					</article>
+				</>
+			);
+		})
+	}
 </section>
 
 <style>
@@ -77,7 +139,13 @@ const getLang = (id: string) => id.split(/[\/_]/)[0];
 		border: 1px solid var(--line);
 		border-radius: 1rem;
 		overflow: hidden;
-		font-family: system-ui, -apple-system, 'Hiragino Sans', 'Yu Gothic UI', 'Noto Sans JP', sans-serif;
+		font-family:
+			system-ui,
+			-apple-system,
+			"Hiragino Sans",
+			"Yu Gothic UI",
+			"Noto Sans JP",
+			sans-serif;
 		color: var(--ink);
 		word-break: auto-phrase;
 		overflow-wrap: anywhere;
@@ -91,6 +159,23 @@ const getLang = (id: string) => id.split(/[\/_]/)[0];
 			--line: #2a3140;
 			--accent: #7d9bff;
 		}
+	}
+	.day-separator {
+		display: flex;
+		align-items: center;
+		gap: 0.75rem;
+		margin: 1.5rem 0 0.75rem;
+		font-size: 0.8rem;
+		font-weight: 600;
+		color: var(--muted, #6b7280);
+	}
+	.day-separator::before,
+	.day-separator::after {
+		content: "";
+		flex: 1;
+		height: 1px;
+		background: currentColor;
+		opacity: 0.25;
 	}
 
 	.post {
@@ -107,7 +192,7 @@ const getLang = (id: string) => id.split(/[\/_]/)[0];
 
 	/* Thread line connecting avatars */
 	.post::before {
-		content: '';
+		content: "";
 		position: absolute;
 		left: calc(var(--pad) + var(--rail) / 2 - 1px);
 		top: 0;
@@ -141,7 +226,8 @@ const getLang = (id: string) => id.split(/[\/_]/)[0];
 		transition: box-shadow 0.15s ease;
 	}
 	.post:hover .avatar {
-		box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent) 5%, var(--surface));
+		box-shadow: 0 0 0 4px
+			color-mix(in srgb, var(--accent) 5%, var(--surface));
 	}
 
 	.body {
@@ -187,7 +273,7 @@ const getLang = (id: string) => id.split(/[\/_]/)[0];
 	}
 	/* Whole post is clickable */
 	.title a::after {
-		content: '';
+		content: "";
 		position: absolute;
 		inset: 0;
 		z-index: 2;

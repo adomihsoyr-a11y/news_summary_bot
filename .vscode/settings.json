@@ -9,5 +9,8 @@
     },
     "python.useEnvironmentsExtension": false,
     "python.defaultInterpreterPath": "${workspaceFolder}/.venv/bin/python",
-    "window.zoomLevel": 0
+    "[astro]": {
+        "editor.formatOnSave": true,
+        "editor.defaultFormatter": "astro-build.astro-vscode"
+    }
 }
