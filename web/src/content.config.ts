@@ -14,6 +14,7 @@ const digests = defineCollection({
     title: z.string(),
     description: z.string(),
     pubDate: z.coerce.date(),
+    model: z.string().optional(),
     updatedDate: z.coerce.date().optional(),
   }),
 });

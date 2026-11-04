@@ -82,8 +82,12 @@ const dayFmt = new Intl.DateTimeFormat("ja-JP", {
 
 						<div class="body">
 							<p class="byline">
-								<span class="name">Market Digest</span>
-								<span class="handle">@{digest.id}</span>
+								{getLang(digest.id) === "en" ? (
+									<span class="name">Market Digest</span>
+								) : (
+									<span class="name">市場 ダイジェスト</span>
+								)}
+								<span class="handle">@{digest.data.model || digest.id}</span>
 								<time
 									class="time"
 									datetime={date.toISOString()}
@@ -220,6 +224,7 @@ const dayFmt = new Intl.DateTimeFormat("ja-JP", {
 		width: var(--rail);
 		height: var(--rail);
 		border-radius: 50%;
+		overflow: hidden;
 		color: #fff;
 		background: var(--accent);
 		box-shadow: 0 0 0 4px var(--surface);

@@ -6,7 +6,7 @@ import sys
 
 import tiktoken
 from google import genai
-from google.genai.types import Model
+from google.genai._gaos.types.interactions import Interaction
 from pydantic import BaseModel, Field
 
 from .sources import Source
@@ -25,7 +25,7 @@ body は次の形式のMarkdown本文とし、前置きやタイトルは書か�
 4. 今日注目すべきポイント(箇条書き3つ)"""
 
 
-class DigestOutput(BaseModel):
+class LLMOutput(BaseModel):
     """Geminiに返させる構造。説明文はそのままモデルへの指示になる。"""
 
     title: str = Field(
@@ -37,6 +37,12 @@ class DigestOutput(BaseModel):
     body: str = Field(
         description="Markdown形式の本文。1. から始め、前置き・タイトル・コードブロックは含めない"
     )
+
+
+class DigestOutput(LLMOutput):
+    """Digest用の出力。"""
+
+    model: str
 
 
 def build_prompt(
@@ -120,7 +126,7 @@ def run_with_timeout(fn, timeout: float):
 
 def with_retry(
     call, models: list[str], max_attempts: int = 6, switch_after: float = 120.0
-):
+) -> Interaction:
     """
     call(model) を実行する。
     - switch_after 秒応答がなければ次のモデルに切り替えて即再試行
@@ -197,33 +203,13 @@ def list_models() -> list[str]:
     return text_models
 
 
-# def with_retry(fn, max_attempts: int = 6):
-#     """503/429/通信エラーなどを、待ちを伸ばしながら再試行する。"""
-#     for attempt in range(max_attempts):
-#         try:
-#             label = f"API呼び出し (試行 {attempt + 1}/{max_attempts})"
-#             print(f"[INFO] {label} 開始", flush=True)
-#             with heartbeat(label):
-#                 return fn()
-#         except Exception as e:
-#             m = re.search(r"Error code: (\d{3})", str(e))
-#             code = getattr(e, "status_code", None) or (int(m.group(1)) if m else None)
-#             if code in NON_RETRYABLE or attempt == max_attempts - 1:
-#                 raise
-#             wait = 10 * 2**attempt + random.uniform(0, 5)  # 約10, 20, 40, 80, 160秒
-#             print(
-#                 f"[WARN] {type(e).__name__} (code={code})。{wait:.0f}秒後に再試行 ({attempt + 1}/{max_attempts - 1})"
-#             )
-#             time.sleep(wait)
-
-
 def summarize(prompt: str) -> DigestOutput:
     api_key = os.getenv("GEMINI_API_KEY")
     if not api_key:
         sys.exit("GEMINI_API_KEY が未設定です (.env を確認してください)")
     client = genai.Client(api_key=api_key)
 
-    def call(model: str):
+    def call(model: str) -> Interaction:
         return client.interactions.create(
             model=model,
             input=prompt,
@@ -231,9 +217,12 @@ def summarize(prompt: str) -> DigestOutput:
             response_format={
                 "type": "text",
                 "mime_type": "application/json",
-                "schema": DigestOutput.model_json_schema(),
+                "schema": LLMOutput.model_json_schema(),
             },
         )
 
     interaction = with_retry(call, list_models(), switch_after=100.0)
-    return DigestOutput.model_validate_json(interaction.output_text)
+    llm_output = LLMOutput.model_validate_json(interaction.output_text)
+    output = DigestOutput(**llm_output.model_dump(), model=interaction.model)
+
+    return output

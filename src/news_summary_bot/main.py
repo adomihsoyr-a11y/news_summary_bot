@@ -10,7 +10,7 @@ import requests
 from bs4 import BeautifulSoup
 from dotenv import load_dotenv
 
-from news_summary_bot.llm_controler import DigestOutput
+from news_summary_bot.llm_controler import DigestOutput, LLMOutput
 
 from .sources import Source
 
@@ -75,6 +75,7 @@ def build_frontmatter(now: datetime.datetime, content: DigestOutput) -> str:
         f"title: {q(f'{now:%Y-%m-%d} {content.title}')}\n"
         f"description: {q(content.description)}\n"
         f"pubDate: {now:%Y-%m-%d %H:%M}\n"
+        f"model: {q(content.model)}\n"
         "---\n\n"
         f"{content.body}\n"
     )
